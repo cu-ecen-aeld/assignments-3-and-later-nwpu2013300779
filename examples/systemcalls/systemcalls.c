@@ -1,4 +1,9 @@
 #include "systemcalls.h"
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -16,7 +21,27 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    int ret = system(cmd);
+    int status;
+    if (ret == -1)
+    {
+        perror("do_system system");
+        return false;
+    }
 
+    if (WIFEXITED(ret)) {
+        status = WEXITSTATUS(ret);
+        printf("Normal termination with exit status=%d\n", status);
+        if (status)
+            return false;
+    }
+
+    if (WIFSIGNALED (ret))
+        printf ("Killed by signal=%d%s\n",WTERMSIG (ret), WCOREDUMP (ret) ? " (dumped core)" : "");
+    if (WIFSTOPPED(ret))
+        printf("Stopped by signal=%d\n", WSTOPSIG(ret));
+    if (WIFCONTINUED (ret))
+        printf ("Continued\n");
     return true;
 }
 
@@ -49,15 +74,50 @@ bool do_exec(int count, ...)
     // and may be removed
     command[count] = command[count];
 
-/*
- * TODO:
- *   Execute a system command by calling fork, execv(),
- *   and wait instead of system (see LSP page 161).
- *   Use the command[0] as the full path to the command to execute
- *   (first argument to execv), and use the remaining arguments
- *   as second argument to the execv() command.
- *
-*/
+    /*
+     * TODO:
+     *   Execute a system command by calling fork, execv(),
+     *   and wait instead of system (see LSP page 161).
+     *   Use the command[0] as the full path to the command to execute
+     *   (first argument to execv), and use the remaining arguments
+     *   as second argument to the execv() command.
+     *
+     */
+    //int ret;
+    int status;
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror ("fork");
+        return false;
+    } else if (pid == 0) {
+        /**child */
+        execv(command[0], command);
+        perror ("execv");
+        exit(EXIT_FAILURE);
+    } else {
+        /**parent */
+        pid = wait (&status);
+        if (pid == -1) 
+            perror ("wait");
+
+        printf ("pid=%d\n", pid);
+
+        if (WIFEXITED (status)) {
+            printf ("Normal termination with exit status=%d\n",WEXITSTATUS (status));
+            if (WEXITSTATUS (status))
+                return false;
+        }
+
+        if (WIFSIGNALED (status))
+            printf ("Killed by signal=%d%s\n",WTERMSIG (status), WCOREDUMP (status) ? " (dumped core)" : "");
+        if (WIFSTOPPED(status))
+            printf("Stopped by signal=%d\n", WSTOPSIG(status));
+        if (WIFCONTINUED (status))
+            printf ("Continued\n");
+
+    }
+
+
 
     va_end(args);
 
@@ -78,6 +138,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     for(i=0; i<count; i++)
     {
         command[i] = va_arg(args, char *);
+        printf("[do_exec_redirect] param%d:%s\n",i,command[i]);
     }
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
@@ -92,6 +153,51 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    //int ret;
+    int status;
+    int fd = open("outputfile", O_WRONLY|O_TRUNC|O_CREAT, 0644);
+    if (fd < 0) { 
+        perror("open"); 
+        abort(); 
+    }
+    fflush(stdout); //avoid thee duplicated printf() output 
+    pid_t pid = fork();
+
+    if (pid == -1) {
+        perror ("fork");
+        return false;
+    } else if (pid == 0) {
+        if (dup2(fd, 1) < 0) { 
+            perror("dup2"); 
+            abort(); 
+        }
+        close(fd);
+        printf("cmd1:%s\n", command[1]);
+        execvp(command[0], command);
+        perror("execv");
+        exit(EXIT_FAILURE);
+    } else {
+        /**parent */
+        pid = wait (&status);
+        if (pid == -1) 
+            perror ("wait");
+
+        printf ("pid=%d\n", pid);
+
+        if (WIFEXITED (status)) {
+            printf ("Normal termination with exit status=%d\n",WEXITSTATUS (status));
+            if (WEXITSTATUS (status))
+                return false;
+        }
+
+        if (WIFSIGNALED (status))
+            printf ("Killed by signal=%d%s\n",WTERMSIG (status), WCOREDUMP (status) ? " (dumped core)" : "");
+        if (WIFSTOPPED(status))
+            printf("Stopped by signal=%d\n", WSTOPSIG(status));
+        if (WIFCONTINUED (status))
+            printf ("Continued\n");
+
+    }
 
     va_end(args);
 
