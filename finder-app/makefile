@@ -1,7 +1,8 @@
 
-CC=${CROSS_COMPILE}gcc
+$(info CROSS_COMPILE:$(CROSS_COMPILE))
+CC=$(CROSS_COMPILE)gcc
 SZ=${CROSS_COMPILE}size
-$(info CC:${CC});
+$(info CC:${CC})
 CFlags=-Wall -g -std=c11
 
 target=writer
