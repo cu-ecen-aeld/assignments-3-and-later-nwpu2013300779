@@ -13,6 +13,8 @@ $(info Sourcs: $(srcs))
 objs:=$(srcs:.c=.o)
 $(info Objetcs:$(objs))
 
+all: $(target)
+
 $(target):$(objs)
 	@echo "linking ..."
 	$(CC) $(CFlags) -o $@ $<
