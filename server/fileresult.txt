@@ -1,1 +1,1 @@
-aesdsocket: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=321ceb15428d01670189b16c8742b5bea0962630, for GNU/Linux 3.2.0, with debug_info, not stripped
+aesdsocket: ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=2997afa49cd09ebb26bb58225a04f2a331315b17, for GNU/Linux 3.2.0, with debug_info, not stripped

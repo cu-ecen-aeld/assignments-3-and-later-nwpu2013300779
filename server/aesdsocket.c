@@ -24,7 +24,8 @@
 #define BUF_STEP_LEN  4096
 bool caught_sigint = false;
 bool caught_sigterm = false;
-
+int sockfd = -1;
+bool conn_accept = false;
 void *get_in_addr(struct sockaddr *sa)
 {
     printf("\n[get_in_addr] sa_family:%d \n",sa->sa_family);
@@ -85,10 +86,10 @@ void send_all_packet(int new_fd)
     while (!feof(file))
     {
         // read_len = getline(&buf, &buflen, file);
-        printf("[0] buf:%p buflen:%ld",buf, buflen );
+        // printf("[0] buf:%p buflen:%ld",buf, buflen );
         fgets(buf, buflen, file);
         read_len = strlen(buf);
-        printf("[1] buf:%p buflen:%ld read_len:%ld \n",buf, buflen, read_len);
+        // printf("[1] buf:%p buflen:%ld read_len:%ld \n",buf, buflen, read_len);
         if (feof(file))
         {
             break;
@@ -145,7 +146,7 @@ void recv_packet(int new_fd)
 int start_socket(bool deamon)
 {
     char addrstr[INET6_ADDRSTRLEN];
-    int status, sockfd;
+    int status;
 
     struct addrinfo hints = {.ai_flags = 0, .ai_family = AF_INET, .ai_socktype = SOCK_STREAM};
     //hints.ai_flags = AI_PASSIVE;
@@ -184,7 +185,7 @@ int start_socket(bool deamon)
         }
 
     freeaddrinfo(res_servinfo);
-    if( deamon ){
+        if( deamon ){
         /*start deamon*/
         pid_t pid = fork();
         printf("start in deamon mode  pid:%d\n",pid);
@@ -199,6 +200,7 @@ int start_socket(bool deamon)
             break;
 
             default:{
+                return 0;
                 int status;
                 printf("child process executing, wait \n");
                 pid = wait(&status);
@@ -220,12 +222,15 @@ int start_socket(bool deamon)
 
     while (!caught_sigint && !caught_sigterm)
     {
+        conn_accept = false;
         int new_fd = accept(sockfd, (struct sockaddr *)&connected_addr, &con_addr_len);
+        conn_accept = true;
         if (new_fd == -1) {
             perror("accept");
-            exit(1);
+            break;
         }
-        inet_ntop(connected_addr.ss_family, get_in_addr((struct sockaddr *)&connected_addr),addrstr, sizeof addrstr);
+
+        inet_ntop(connected_addr.ss_family, get_in_addr((struct sockaddr *)&connected_addr), addrstr, sizeof addrstr);
         printf("server: got connection from %s\n", addrstr);
         LOG_DEBG("Accepted connection from %s\n", addrstr);
         recv_packet(new_fd);
@@ -246,13 +251,20 @@ int start_socket(bool deamon)
 	    syslog( LOG_DEBUG, "Caught SIGTERM, exiting" );
 	}
     syslog( LOG_DEBUG, "Deleting file \"%s\"", TEST_FILE_PATH );
-	remove( TEST_FILE_PATH );
+    printf("Deleting file \"%s\" \n", TEST_FILE_PATH);
+	int ret=remove(TEST_FILE_PATH);
+    if (ret != 0){
+        perror("remove");
+        printf("Deleting file \"%s\" failed \n", TEST_FILE_PATH);
+    }
     
     if (close(sockfd))
     {
         syslog( LOG_ERR, "close(fd) error: %d (%s)\n",
 		    errno, strerror( errno ) );
     }
+    closelog();
+    fflush(stdout);
     return 0;
 }
 void sig_handler(int signum)
@@ -268,26 +280,40 @@ void sig_handler(int signum)
 	case SIGTERM:
 	    caught_sigterm = true;
 	    break;
-	    
-	// case SIGPIPE:
-	//     caught_sigpipe = true;
-	    
+	default:
+        break;
     }
-
+    if(conn_accept == false){
+        /*safe to exit*/
+        syslog( LOG_DEBUG, "Deleting file \"%s\"", TEST_FILE_PATH );
+        printf("Deleting file \"%s\" \n", TEST_FILE_PATH);
+        int ret=remove(TEST_FILE_PATH);
+        if (ret != 0){
+            perror("remove");
+            printf("Deleting file \"%s\" failed \n", TEST_FILE_PATH);
+        }
+        
+        if (close(sockfd))
+        {
+            syslog( LOG_ERR, "close(fd) error: %d (%s)\n",
+                errno, strerror( errno ) );
+        }
+        closelog();
+        fflush(stdout);
+        exit(0);
+    }
     errno = temp_errorno;
-
 }
 
 int main(int argc, char **argv)
 {
     bool deamon = false;
+    openlog(NULL, 0, LOG_USER);
     printf("argc:%d arg1:%s \n", argc, argv[1]);
     for (int i = 0; i < argc; i++){
         if(!strcmp(argv[i],"-d"))
             deamon = true;
     }
-    int fd = open(TEST_FILE_PATH, O_RDWR | O_APPEND | O_CREAT | O_TRUNC, 0664);
-    close(fd);
 
     struct sigaction sa;
     sa.sa_handler = sig_handler;
